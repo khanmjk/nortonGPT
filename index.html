@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MS-DOS Norton Antivirus Simulation</title>
+    <style>
+        body {
+            background-color: #000080; /* Classic Blue Screen background */
+            color: #C0C0C0; /* Light Gray text */
+            font-family: 'Consolas', 'Lucida Console', 'Courier New', monospace;
+            font-size: 16px;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars on body */
+        }
+        #scan-container {
+            width: 100%;
+            height: 100vh;
+            padding: 15px;
+            box-sizing: border-box;
+            overflow-y: scroll; /* Allow scrolling within the container */
+            border: 2px solid #C0C0C0;
+            background-color: #000000; /* Black terminal background */
+        }
+        pre {
+            margin: 0;
+            white-space: pre-wrap; /* Allow wrapping but preserve spaces */
+            word-wrap: break-word; /* Break long words/paths */
+        }
+        .header {
+            color: #FFFF00; /* Yellow */
+            font-weight: bold;
+        }
+        .subheader {
+             color: #FFFFFF; /* White */
+        }
+        .scanline {
+            color: #C0C0C0; /* Light Gray */
+        }
+        .virus {
+            color: #FF0000; /* Bright Red */
+            font-weight: bold;
+            background-color: #C0C0C0; /* Gray background for emphasis */
+            display: block; /* Make it take the full line */
+            padding: 2px 0;
+        }
+        .quarantine {
+            color: #FFFF00; /* Yellow */
+        }
+        .summary {
+            color: #00FF00; /* Bright Green */
+        }
+         .spinner {
+            display: inline-block;
+            width: 1em; /* Ensure consistent width for spinner char */
+            text-align: center;
+            color: #FFFFFF; /* White spinner */
+         }
+        hr {
+            border: none;
+            border-top: 1px solid #C0C0C0;
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="scan-container">
+        <pre id="output"></pre>
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const SIMULATION_DURATION_MS = 120 * 1000; // 2 minutes in milliseconds
+        const VIRUS_DETECTION_PROBABILITY = 0.006; // 0.6% chance per file
+        const SCAN_INTERVAL_MS = 50; // Milliseconds between file "scans"
+        const MAX_PATH_DISPLAY_LENGTH = 60; // Max length for display
+
+        // --- Fake File System Elements ---
+        const commonDirs = [
+            "C:\\DOS", "C:\\WINDOWS", "C:\\WINDOWS\\SYSTEM", "C:\\WINDOWS\\SYSTEM32",
+            "C:\\PROGRA~1", "C:\\MYDOCU~1", "C:\\TEMP", "C:\\GAMES", "C:\\GAMES\\DOOM",
+            "C:\\DRIVERS", "C:\\CONFIG"
+        ];
+        const commonFiles = [
+            "COMMAND.COM", "KERNEL32.DLL", "USER32.DLL", "GDI32.DLL", "WIN.INI", "SYSTEM.INI",
+            "AUTOEXEC.BAT", "CONFIG.SYS", "IO.SYS", "MSDOS.SYS", "EXPLORER.EXE", "NOTEPAD.EXE",
+            "SOL.EXE", "WINMINE.EXE", "SETUP.EXE", "INSTALL.BAT", "README.TXT", "LICENSE.DOC",
+            "NAV.EXE", "NAVDRV.SYS", "VIRUSDEF.DAT", "REPORT.LOG"
+        ];
+        const commonExtensions = [".EXE", ".COM", ".BAT", ".DLL", ".SYS", ".INI", ".TXT", ".DOC", ".LOG", ".INF", ".DRV", ".DAT", ".HLP"];
+        const fakeVirusNames = [
+            "Trojan.FakeDOS", "Worm.Nostalgia", "Macro.Sim95", "Boot.Classic",
+            "Stealth.MemSim", "POLY.OldSchool", "File.Retro.123", "Jerusalem.Sim",
+            "Stoned.Sim", "Cascade.Fake"
+        ];
+
+        // --- State Variables ---
+        const outputElement = document.getElementById('output');
+        const scanContainer = document.getElementById('scan-container');
+        const startTime = Date.now();
+        let filesScanned = 0;
+        let virusesFound = 0;
+        let spinnerIndex = 0;
+        const spinnerChars = ['\\', '|', '/', '-']; // Using | instead of - for better visibility
+        let scanIntervalId = null;
+
+        // --- Helper Functions ---
+        function getRandomElement(arr) {
+            return arr[Math.floor(Math.random() * arr.length)];
+        }
+
+        function generateFakePath() {
+            const dir = getRandomElement(commonDirs);
+            let file = getRandomElement(commonFiles);
+            // Occasionally generate a random filename
+            if (Math.random() < 0.2) {
+                const randomName = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const randomExt = getRandomElement(commonExtensions);
+                file = randomName + randomExt;
+            }
+            return `${dir}\\${file}`;
+        }
+
+        function appendLine(text, cssClass = '') {
+            const line = document.createElement('div'); // Use divs for easier styling
+            if (cssClass) {
+                line.classList.add(cssClass);
+            }
+            line.textContent = text; // Use textContent for security
+            outputElement.appendChild(line);
+            // Auto-scroll to the bottom
+            scanContainer.scrollTop = scanContainer.scrollHeight;
+        }
+
+         function updateScanLine(filePath) {
+            // Remove previous scan line if it exists
+            const existingScanLine = outputElement.querySelector('.current-scan');
+            if (existingScanLine) {
+                outputElement.removeChild(existingScanLine);
+            }
+
+            const spinner = spinnerChars[spinnerIndex];
+            spinnerIndex = (spinnerIndex + 1) % spinnerChars.length;
+
+            // Truncate path if too long
+            let displayPath = filePath;
+            if (displayPath.length > MAX_PATH_DISPLAY_LENGTH) {
+                displayPath = "..." + displayPath.slice(-MAX_PATH_DISPLAY_LENGTH + 3);
+            }
+
+            const lineText = `Scanning: ${displayPath.padEnd(MAX_PATH_DISPLAY_LENGTH)} [${spinner}]`;
+            const line = document.createElement('div');
+            line.classList.add('scanline', 'current-scan'); // Add special class to find it later
+            line.textContent = lineText;
+            outputElement.appendChild(line);
+             scanContainer.scrollTop = scanContainer.scrollHeight; // Keep scrolling
+        }
+
+
+        function displayHeader() {
+            appendLine("Norton Antivirus (MS-DOS Web Simulation)", "header");
+            appendLine("Copyright (c) 1995-2025 Symantec & Gemini Corp.", "subheader");
+            outputElement.appendChild(document.createElement('hr'));
+            appendLine("Checking System Memory....... [OK]");
+            appendLine("Checking Master Boot Record.. [OK]");
+            outputElement.appendChild(document.createElement('hr'));
+            appendLine("Scanning Drive C: for known viruses...");
+            appendLine(""); // Empty line for spacing
+        }
+
+        function displaySummary() {
+            const endTime = Date.now();
+            const durationSeconds = (endTime - startTime) / 1000;
+            outputElement.appendChild(document.createElement('hr'));
+            appendLine("Scan Summary:", "summary");
+            appendLine(`   Scan Time:       ${durationSeconds.toFixed(2)} seconds`, "summary");
+            appendLine(`   Files Scanned:   ${filesScanned}`, "summary");
+            appendLine(`   Viruses Found:   ${virusesFound}`, "summary");
+            appendLine(`   Files Quarantined: ${virusesFound} (Simulated)`, "summary");
+             outputElement.appendChild(document.createElement('hr'));
+            appendLine("Scan Complete.", "header");
+             scanContainer.scrollTop = scanContainer.scrollHeight; // Final scroll
+        }
+
+        // --- Main Scan Loop Function ---
+        function scanStep() {
+            const currentTime = Date.now();
+            if (currentTime - startTime >= SIMULATION_DURATION_MS) {
+                clearInterval(scanIntervalId);
+                 // Clear the last "Scanning..." line before summary
+                const existingScanLine = outputElement.querySelector('.current-scan');
+                if (existingScanLine) outputElement.removeChild(existingScanLine);
+                displaySummary();
+                return;
+            }
+
+            filesScanned++;
+            const currentFile = generateFakePath();
+
+            // Display the scanning progress line (updates in place)
+            updateScanLine(currentFile);
+
+            // Simulate virus detection
+            if (Math.random() < VIRUS_DETECTION_PROBABILITY) {
+                virusesFound++;
+                const virusName = getRandomElement(fakeVirusNames);
+
+                // Add virus messages below the current scan line
+                appendLine(`!!! WARNING: Virus Found! [${virusName}]`, "virus");
+                appendLine(`    In File: ${currentFile}`, "virus");
+                appendLine(`    Action: File Quarantined (Simulated).`, "quarantine");
+                appendLine(""); // Add blank line after virus message
+            }
+        }
+
+        // --- Start the Simulation ---
+        displayHeader();
+        scanIntervalId = setInterval(scanStep, SCAN_INTERVAL_MS);
+
+    </script>
+</body>
+</html>
